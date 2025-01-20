@@ -1,5 +1,12 @@
 # electron-forge-maker-nsis
 
+## 26.0.0-alpha.10
+
+### Patch Changes
+
+- Updated dependencies []:
+  - app-builder-lib@26.0.0-alpha.10
+
 ## 26.0.0-alpha.9
 
 ### Patch Changes
