@@ -1,5 +1,16 @@
 # dmg-builder
 
+## 26.0.0-alpha.10
+
+### Major Changes
+
+- [#8782](https://github.com/electron-userland/electron-builder/pull/8782) [`633490cb`](https://github.com/electron-userland/electron-builder/commit/633490cb395c0af8027116b345500c58a7616964) Thanks [@mmaietta](https://github.com/mmaietta)! - fix: removing conditional logic that would build HFS+ dmg on non-arm64 macs as HFS+ was sunset in macos 15.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - app-builder-lib@26.0.0-alpha.10
+
 ## 26.0.0-alpha.9
 
 ### Patch Changes
