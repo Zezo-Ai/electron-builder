@@ -1,4 +1,5 @@
-import { isEmptyOrSpaces, log, InvalidConfigurationError } from "builder-util"
+import { InvalidConfigurationError, isEmptyOrSpaces, log } from "builder-util"
+import { Nullish } from "builder-util-runtime"
 import { readFile, readJson } from "fs-extra"
 import * as path from "path"
 import * as semver from "semver"
@@ -38,7 +39,7 @@ export function checkMetadata(metadata: Metadata, devMetadata: any | null, appPa
     errors.push(`Please specify '${missedFieldName}' in the package.json (${appPackageFile})`)
   }
 
-  const checkNotEmpty = (name: string, value: string | null | undefined) => {
+  const checkNotEmpty = (name: string, value: string | Nullish) => {
     if (isEmptyOrSpaces(value)) {
       reportError(name)
     }
@@ -92,17 +93,28 @@ function versionSatisfies(version: string | semver.SemVer | null, range: string 
   return semver.satisfies(coerced, range, loose)
 }
 
-function checkDependencies(dependencies: { [key: string]: string } | null | undefined, errors: Array<string>) {
+function checkDependencies(dependencies: Record<string, string> | Nullish, errors: Array<string>) {
   if (dependencies == null) {
     return
   }
 
-  const updaterVersion = dependencies["electron-updater"]
-  const requiredElectronUpdaterVersion = "4.0.0"
-  if (updaterVersion != null && !versionSatisfies(updaterVersion, `>=${requiredElectronUpdaterVersion}`)) {
-    errors.push(
-      `At least electron-updater ${requiredElectronUpdaterVersion} is recommended by current electron-builder version. Please set electron-updater version to "^${requiredElectronUpdaterVersion}"`
-    )
+  let updaterVersion = dependencies["electron-updater"]
+  if (updaterVersion != null) {
+    // Pick the version out of yarn berry patch syntax
+    // "patch:electron-updater@npm%3A6.4.1#~/.yarn/patches/electron-updater-npm-6.4.1-ef33e6cc39.patch"
+    if (updaterVersion.startsWith("patch:")) {
+      const match = updaterVersion.match(/@npm%3A(.+?)#/)
+      if (match) {
+        updaterVersion = match[1]
+      }
+    }
+
+    const requiredElectronUpdaterVersion = "4.0.0"
+    if (!versionSatisfies(updaterVersion, `>=${requiredElectronUpdaterVersion}`)) {
+      errors.push(
+        `At least electron-updater ${requiredElectronUpdaterVersion} is recommended by current electron-builder version. Please set electron-updater version to "^${requiredElectronUpdaterVersion}"`
+      )
+    }
   }
 
   const swVersion = dependencies["electron-builder-squirrel-windows"]

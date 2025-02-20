@@ -1,11 +1,12 @@
 import { DIR_TARGET, Platform } from "app-builder-lib"
 import { readAsar } from "app-builder-lib/out/asar/asar"
 import { outputFile } from "fs-extra"
-import * as path from "path"
 import * as fs from "fs/promises"
+import * as path from "path"
 import { assertThat } from "./helpers/fileAssert"
 import { app, appThrows, assertPack, modifyPackageJson, PackedContext, removeUnstableProperties, verifyAsarFileTree } from "./helpers/packTester"
 import { verifySmartUnpack } from "./helpers/verifySmartUnpack"
+import { spawnSync } from "child_process"
 
 async function createFiles(appDir: string) {
   await Promise.all([
@@ -169,8 +170,9 @@ test.ifDevOrLinuxCi("local node module with file protocol", () => {
       isInstallDepsBefore: true,
       projectDirCreated: async (projectDir, tmpDir) => {
         const tempDir = await tmpDir.getTempDir()
-        let localPath = path.join(tempDir, "foo")
+        const localPath = path.join(tempDir, "foo")
         await outputFile(path.join(localPath, "package.json"), `{"name":"foo","version":"9.0.0","main":"index.js","license":"MIT","dependencies":{"ms":"2.0.0"}}`)
+        spawnSync("npm", ["install"], { cwd: localPath })
         await modifyPackageJson(projectDir, data => {
           data.dependencies = {
             foo: `file:${localPath}`,
@@ -194,16 +196,20 @@ test.ifDevOrLinuxCi("failed peer dep", () => {
     },
     {
       isInstallDepsBefore: true,
-      projectDirCreated: projectDir =>
-        modifyPackageJson(projectDir, data => {
-          //noinspection SpellCheckingInspection
-          data.dependencies = {
-            debug: "4.1.1",
-            "rc-datepicker": "4.0.0",
-            react: "15.2.1",
-            "react-dom": "15.2.1",
-          }
-        }),
+      projectDirCreated: projectDir => {
+        return Promise.all([
+          modifyPackageJson(projectDir, data => {
+            //noinspection SpellCheckingInspection
+            data.dependencies = {
+              debug: "4.1.1",
+              "rc-datepicker": "4.0.0",
+              react: "15.2.1",
+              "react-dom": "15.2.1",
+            }
+          }),
+          outputFile(path.join(projectDir, "yarn.lock"), ""),
+        ])
+      },
       packed: context => {
         return verifySmartUnpack(context.getResources(Platform.LINUX))
       },
@@ -228,7 +234,6 @@ test.ifAll.ifDevOrLinuxCi("ignore node_modules", () => {
           //noinspection SpellCheckingInspection
           data.dependencies = {
             "ci-info": "2.0.0",
-            "@types/node": "14.17.0",
             // this contains string-width-cjs 4.2.3
             "@isaacs/cliui": "8.0.2",
           }
@@ -277,30 +282,32 @@ test.ifAll.ifDevOrLinuxCi("asarUnpack node_modules which has many modules", () =
     },
     {
       isInstallDepsBefore: true,
-      projectDirCreated: projectDir =>
-        modifyPackageJson(projectDir, data => {
+      projectDirCreated: async projectDir => {
+        await modifyPackageJson(projectDir, data => {
           data.dependencies = {
             "@react-navigation/stack": "^6.3.7",
             "@sentry/electron": "^4.4.0",
-            "axios": "^1.1.3",
+            axios: "^1.1.3",
             "deep-equal": "^2.1.0",
-            "dotenv": "^16.4.5",
+            dotenv: "^16.4.5",
             "electron-log": "^4.4.8",
             "electron-updater": "^6.0.4",
             "electron-window-state": "^5.0.3",
             "jwt-decode": "^3.1.2",
-            "keytar": "^7.9.0",
-            "webpack": "^5.74.0",
+            keytar: "^7.9.0",
+            webpack: "^5.74.0",
             "pubsub-js": "^1.9.4",
-            "react": "^18.2.0",
+            react: "^18.2.0",
             "react-dom": "^18.2.0",
             "react-native-web": "^0.18.10",
             "react-router-dom": "^6.4.0",
             "source-map-support": "^0.5.16",
-            "yargs": "^16.2.0",
+            yargs: "^16.2.0",
             "ci-info": "2.0.0",
           }
-        }),
+        })
+        await outputFile(path.join(projectDir, "yarn.lock"), "")
+      },
       packed: async context => {
         await assertThat(path.join(context.getResources(Platform.LINUX), "app.asar.unpacked/node_modules/jwt-decode")).isDirectory()
         await assertThat(path.join(context.getResources(Platform.LINUX), "app.asar.unpacked/node_modules/keytar")).isDirectory()
@@ -318,35 +325,37 @@ test.ifAll.ifDevOrLinuxCi("exclude some modules when asarUnpack node_modules whi
     {
       targets: Platform.LINUX.createTarget(DIR_TARGET),
       config: {
-        asarUnpack: ["node_modules","!**/node_modules/ci-info/**/*"]
+        asarUnpack: ["node_modules", "!**/node_modules/ci-info/**/*"],
       },
     },
     {
       isInstallDepsBefore: true,
-      projectDirCreated: projectDir =>
-        modifyPackageJson(projectDir, data => {
+      projectDirCreated: async projectDir => {
+        await modifyPackageJson(projectDir, data => {
           data.dependencies = {
             "@react-navigation/stack": "^6.3.7",
             "@sentry/electron": "^4.4.0",
-            "axios": "^1.1.3",
+            axios: "^1.1.3",
             "deep-equal": "^2.1.0",
-            "dotenv": "^16.4.5",
+            dotenv: "^16.4.5",
             "electron-log": "^4.4.8",
             "electron-updater": "^6.0.4",
             "electron-window-state": "^5.0.3",
             "jwt-decode": "^3.1.2",
-            "keytar": "^7.9.0",
-            "webpack": "^5.74.0",
+            keytar: "^7.9.0",
+            webpack: "^5.74.0",
             "pubsub-js": "^1.9.4",
-            "react": "^18.2.0",
+            react: "^18.2.0",
             "react-dom": "^18.2.0",
             "react-native-web": "^0.18.10",
             "react-router-dom": "^6.4.0",
             "source-map-support": "^0.5.16",
-            "yargs": "^16.2.0",
+            yargs: "^16.2.0",
             "ci-info": "2.0.0",
           }
-        }),
+        })
+        await outputFile(path.join(projectDir, "yarn.lock"), "")
+      },
       packed: async context => {
         await assertThat(path.join(context.getResources(Platform.LINUX), "app.asar.unpacked/node_modules/jwt-decode")).isDirectory()
         await assertThat(path.join(context.getResources(Platform.LINUX), "app.asar.unpacked/node_modules/keytar")).isDirectory()

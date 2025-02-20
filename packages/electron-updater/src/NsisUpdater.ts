@@ -5,7 +5,7 @@ import { DownloadUpdateOptions } from "./AppUpdater"
 import { BaseUpdater, InstallOptions } from "./BaseUpdater"
 import { DifferentialDownloaderOptions } from "./differentialDownloader/DifferentialDownloader"
 import { FileWithEmbeddedBlockMapDifferentialDownloader } from "./differentialDownloader/FileWithEmbeddedBlockMapDifferentialDownloader"
-import { DOWNLOAD_PROGRESS, verifyUpdateCodeSignature } from "./main"
+import { DOWNLOAD_PROGRESS, VerifyUpdateCodeSignature } from "./main"
 import { findFile, Provider } from "./providers/Provider"
 import { unlink } from "fs-extra"
 import { verifySignature } from "./windowsExecutableCodeSignatureVerifier"
@@ -22,18 +22,18 @@ export class NsisUpdater extends BaseUpdater {
     super(options, app)
   }
 
-  protected _verifyUpdateCodeSignature: verifyUpdateCodeSignature = (publisherNames: Array<string>, unescapedTempUpdateFile: string) =>
+  protected _verifyUpdateCodeSignature: VerifyUpdateCodeSignature = (publisherNames: Array<string>, unescapedTempUpdateFile: string) =>
     verifySignature(publisherNames, unescapedTempUpdateFile, this._logger)
 
   /**
    * The verifyUpdateCodeSignature. You can pass [win-verify-signature](https://github.com/beyondkmp/win-verify-trust) or another custom verify function: ` (publisherName: string[], path: string) => Promise<string | null>`.
    * The default verify function uses [windowsExecutableCodeSignatureVerifier](https://github.com/electron-userland/electron-builder/blob/master/packages/electron-updater/src/windowsExecutableCodeSignatureVerifier.ts)
    */
-  get verifyUpdateCodeSignature(): verifyUpdateCodeSignature {
+  get verifyUpdateCodeSignature(): VerifyUpdateCodeSignature {
     return this._verifyUpdateCodeSignature
   }
 
-  set verifyUpdateCodeSignature(value: verifyUpdateCodeSignature) {
+  set verifyUpdateCodeSignature(value: VerifyUpdateCodeSignature) {
     if (value) {
       this._verifyUpdateCodeSignature = value
     }
@@ -123,6 +123,12 @@ export class NsisUpdater extends BaseUpdater {
   }
 
   protected doInstall(options: InstallOptions): boolean {
+    const installerPath = this.installerPath
+    if (installerPath == null) {
+      this.dispatchError(new Error("No valid update available, can't quit and install"))
+      return false
+    }
+
     const args = ["--updated"]
     if (options.isSilent) {
       args.push("/S")
@@ -144,7 +150,7 @@ export class NsisUpdater extends BaseUpdater {
     }
 
     const callUsingElevation = (): void => {
-      this.spawnLog(path.join(process.resourcesPath, "elevate.exe"), [options.installerPath].concat(args)).catch(e => this.dispatchError(e))
+      this.spawnLog(path.join(process.resourcesPath, "elevate.exe"), [installerPath].concat(args)).catch(e => this.dispatchError(e))
     }
 
     if (options.isAdminRightsRequired) {
@@ -153,7 +159,7 @@ export class NsisUpdater extends BaseUpdater {
       return true
     }
 
-    this.spawnLog(options.installerPath, args).catch((e: Error) => {
+    this.spawnLog(installerPath, args).catch((e: Error) => {
       // https://github.com/electron-userland/electron-builder/issues/1129
       // Node 8 sends errors: https://nodejs.org/dist/latest-v8.x/docs/api/errors.html#errors_common_system_errors
       const errorCode = (e as NodeJS.ErrnoException).code
@@ -164,7 +170,7 @@ export class NsisUpdater extends BaseUpdater {
         callUsingElevation()
       } else if (errorCode === "ENOENT") {
         require("electron")
-          .shell.openPath(options.installerPath)
+          .shell.openPath(installerPath)
           .catch((err: Error) => this.dispatchError(err))
       } else {
         this.dispatchError(e)
